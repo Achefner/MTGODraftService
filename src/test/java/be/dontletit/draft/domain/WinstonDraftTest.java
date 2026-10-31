@@ -195,7 +195,7 @@ class WinstonDraftTest {
     void randomPlay_alsoDraftsEveryCard() {
         for (long seed = 0; seed < 10; seed++) {
             WinstonDraft draft = (WinstonDraft) DraftFixtures.start(DraftFormat.WINSTON, seed);
-            new RandomBot(new Random(seed)).playUntilBlocked(draft, -1);
+            new RandomBot(new Random(seed)).playUntilBlocked(draft, Set.of());
             assertTrue(draft.finished());
             assertEquals(90, draft.picksOf(0).size() + draft.picksOf(1).size());
         }

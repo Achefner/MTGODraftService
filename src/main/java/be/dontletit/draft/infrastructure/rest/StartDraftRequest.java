@@ -1,7 +1,8 @@
 package be.dontletit.draft.infrastructure.rest;
 
 /**
- * `{"source": "random"}` or `{"source": "cube", "collectionId": "..."}`, with an optional
- * `"format"`: CLASSIC (default), ROCHESTER or WINSTON.
+ * Opens a table: `{"source": "random"}` or `{"source": "cube", "collectionId": "..."}`, plus
+ * optional `format` (CLASSIC, ROCHESTER, WINSTON), `playerName`, `timed` (pick timer, default true)
+ * and `startNow` (play at once against bots, default true).
  */
-public record StartDraftRequest(String source, String collectionId, String format) {}
+public record StartDraftRequest(String source, String collectionId, String format, String playerName, Boolean timed, Boolean startNow) {}

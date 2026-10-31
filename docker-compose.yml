@@ -1,0 +1,15 @@
+# The draft service's own database: tables, seats and draft histories.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: mtgodraft
+      POSTGRES_USER: mtgodraft
+      POSTGRES_PASSWORD: mtgodraft
+    ports:
+      - "5434:5432"
+    volumes:
+      - draft-data:/var/lib/postgresql/data
+
+volumes:
+  draft-data:

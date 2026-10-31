@@ -2,7 +2,10 @@ package be.dontletit.draft.domain;
 
 import be.dontletit.draft.domain.command.DraftCommand;
 import be.dontletit.draft.domain.event.BoosterDraftStarted;
+import be.dontletit.draft.domain.event.CardPicked;
 import be.dontletit.draft.domain.event.DraftEvent;
+import be.dontletit.draft.domain.event.PilePassed;
+import be.dontletit.draft.domain.event.PileTaken;
 import be.dontletit.draft.domain.event.WinstonDraftStarted;
 
 import java.util.ArrayList;
@@ -63,6 +66,24 @@ public abstract sealed class Draft permits ClassicDraft, RochesterDraft, Winston
 
     /** The cards a seat has drafted, in order. */
     public abstract List<DraftCard> picksOf(int seat);
+
+    /**
+     * How many decisions the seat has made: picks, or Winston takes and passes. A client sends
+     * the count it saw with its command so that a repeated or outdated command can be refused.
+     */
+    public final int moveCount(int seat) {
+        int moves = 0;
+        for (DraftEvent event : history) {
+            int mover = switch (event) {
+                case CardPicked picked -> picked.seat();
+                case PileTaken taken -> taken.seat();
+                case PilePassed passed -> passed.seat();
+                default -> -1;
+            };
+            if (mover == seat) moves++;
+        }
+        return moves;
+    }
 
     /** Everything that happened, oldest first. */
     public final List<DraftEvent> history() {

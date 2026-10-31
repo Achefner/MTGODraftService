@@ -1,46 +1,62 @@
 package be.dontletit.draft.api;
 
 import java.util.List;
-import java.util.Optional;
 
+/**
+ * Drafting at a table. Whoever opens a table sits at seat 0 and hosts it; others join with its id.
+ * Every call about a seat carries the secret seat token handed out when the seat was taken.
+ * Unknown drafts throw {@link java.util.NoSuchElementException}, wrong tokens {@link SeatAccessDeniedException}.
+ */
 public interface DraftApiPort {
 
     List<DraftFormatView> listFormats();
 
-    /**
-     * Starts a draft from random cards of the database.
-     * @param format a {@link DraftFormatView#name()}, case-insensitive; null means CLASSIC
-     * @throws IllegalArgumentException on an unknown format
-     */
-    DraftView startRandomDraft(String format);
-
-    /**
-     * Starts a draft from a cube collection.
-     * @throws java.util.NoSuchElementException when the collection does not exist
-     * @throws IllegalArgumentException on an unknown format or when the cube is too small for it
-     */
-    DraftView startCubeDraft(String format, String collectionId);
-
-    Optional<DraftView> getDraft(String draftId);
-
-    /**
-     * The player acts, then the other seats play until it is the player's turn again or the draft ends.
-     * @throws IllegalArgumentException when the action does not exist, does not fit the format or names a card that is not there
-     * @throws IllegalStateException when the draft is finished
-     */
-    Optional<DraftView> act(String draftId, DraftAction action);
-
-    /** Shortcut for a {@code PICK} action. */
-    default Optional<DraftView> pick(String draftId, String cardName) {
-        return act(draftId, DraftAction.pick(cardName));
-    }
-
     List<DraftSourceView> listCubes();
 
     /**
-     * Saves the player's picks so far as a DECK collection in the card database.
+     * Opens a table and seats its host. With {@code startNow} the draft starts at once and every
+     * other seat is a bot.
+     * @throws IllegalArgumentException on an unknown format, a cube too small for it, or a missing source
+     * @throws java.util.NoSuchElementException when the cube does not exist
+     */
+    SeatTicket openTable(OpenTableRequest request);
+
+    /** Public facts about a table: format, status and who sits where. No token needed. */
+    TablePreview preview(String draftId);
+
+    /** @throws IllegalStateException when the draft has started or the table is full */
+    SeatTicket join(String draftId, String playerName);
+
+    /**
+     * The host starts the draft: empty seats become bots.
+     * @throws SeatAccessDeniedException when the token is not the host's
+     * @throws IllegalStateException when it has already started
+     */
+    DraftView start(String draftId, String token);
+
+    DraftView view(String draftId, String token);
+
+    /**
+     * The seat plays, then the bots play as far as they can.
+     * @throws IllegalArgumentException when the action does not exist, does not fit the format or names a card that is not there
+     * @throws IllegalStateException when the draft is not running, it is not the seat's turn, or
+     *         {@link DraftAction#expectedMoves()} does not match (the client's view is out of date)
+     */
+    DraftView act(String draftId, String token, DraftAction action);
+
+    /**
+     * Saves the seat's picks so far as a DECK collection in the card database.
      * @throws IllegalArgumentException on a blank name
      * @throws IllegalStateException when nothing has been picked yet
      */
-    Optional<SavedDeckView> saveDeck(String draftId, String deckName);
+    SavedDeckView saveDeck(String draftId, String token, String deckName);
+
+    /**
+     * Follows the draft from a seat. The listener first receives the current view, with the events
+     * after {@code lastSeenVersion} when it is given, then an update after every change.
+     */
+    Subscription subscribe(String draftId, String token, Long lastSeenVersion, DraftListener listener);
+
+    /** After a restart: reloads the running drafts from their history and rearms their timers. */
+    void resumeRunningDrafts();
 }

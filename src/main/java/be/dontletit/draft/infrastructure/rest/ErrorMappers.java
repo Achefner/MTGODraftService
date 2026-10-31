@@ -1,5 +1,6 @@
 package be.dontletit.draft.infrastructure.rest;
 
+import be.dontletit.draft.api.SeatAccessDeniedException;
 import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -13,6 +14,11 @@ import java.util.NoSuchElementException;
 public class ErrorMappers {
 
     private static final Logger LOG = Logger.getLogger(ErrorMappers.class);
+
+    @ServerExceptionMapper
+    public Response denied(SeatAccessDeniedException e) {
+        return json(Response.Status.FORBIDDEN, e.getMessage());
+    }
 
     @ServerExceptionMapper
     public Response badInput(IllegalArgumentException e) {

@@ -36,7 +36,7 @@ class RandomBotTest {
     void playUntilBlocked_inClassic_everyBotPicksUntilTheyWaitForTheHuman() {
         ClassicDraft draft = (ClassicDraft) DraftFixtures.start(DraftFormat.CLASSIC, 1L);
 
-        new RandomBot(new Random(2L)).playUntilBlocked(draft, 0);
+        new RandomBot(new Random(2L)).playUntilBlocked(draft, Set.of(0));
 
         for (int seat = 1; seat < 8; seat++) assertFalse(draft.canAct(seat));
         assertTrue(draft.canAct(0));
@@ -49,10 +49,23 @@ class RandomBotTest {
         RochesterDraft draft = (RochesterDraft) DraftFixtures.start(DraftFormat.ROCHESTER, 1L);
         draft.handle(new PickCard(0, draft.table().get(0).name()));
 
-        new RandomBot(new Random(2L)).playUntilBlocked(draft, 0);
+        new RandomBot(new Random(2L)).playUntilBlocked(draft, Set.of(0));
 
         assertEquals(0, draft.activeSeat());
         assertEquals(2, draft.packNumber(), "seat 0 picks only once from the booster it opened");
         assertEquals(8, draft.pickInPack(), "booster 2 is opened by seat 1: seats 1 to 7 pick, then seat 0");
+    }
+
+    @Test
+    void playUntilBlocked_skipsEveryHumanSeat() {
+        ClassicDraft draft = (ClassicDraft) DraftFixtures.start(DraftFormat.CLASSIC, 1L);
+
+        new RandomBot(new Random(2L)).playUntilBlocked(draft, Set.of(0, 4));
+
+        assertEquals(0, draft.picksOf(0).size());
+        assertEquals(0, draft.picksOf(4).size());
+        assertTrue(draft.canAct(0));
+        assertTrue(draft.canAct(4));
+        for (int seat : new int[] {1, 2, 3, 5, 6, 7}) assertFalse(draft.canAct(seat), "seat " + seat);
     }
 }
