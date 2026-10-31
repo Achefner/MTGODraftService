@@ -1,6 +1,8 @@
 package be.dontletit.draft.infrastructure.rest;
 
+import be.dontletit.draft.api.DraftAction;
 import be.dontletit.draft.api.DraftApiPort;
+import be.dontletit.draft.api.DraftFormatView;
 import be.dontletit.draft.api.DraftSourceView;
 import be.dontletit.draft.api.DraftView;
 import be.dontletit.draft.api.SavedDeckView;
@@ -32,15 +34,22 @@ public class DraftController {
     public Response start(StartDraftRequest request, UriInfo uriInfo) {
         if (request == null || request.source() == null) throw new BadRequestException("source is required: random or cube");
         DraftView draft = switch (request.source().toLowerCase()) {
-            case "random" -> draftApi.startRandomDraft();
+            case "random" -> draftApi.startRandomDraft(request.format());
             case "cube" -> {
                 if (request.collectionId() == null || request.collectionId().isBlank()) throw new BadRequestException("collectionId is required for a cube draft");
-                yield draftApi.startCubeDraft(request.collectionId());
+                yield draftApi.startCubeDraft(request.format(), request.collectionId());
             }
             default -> throw new BadRequestException("Unknown source: " + request.source() + " (expected random or cube)");
         };
         URI location = uriInfo.getBaseUriBuilder().path("drafts").path(draft.id()).build();
         return Response.created(location).entity(draft).build();
+    }
+
+    /** The draft formats: CLASSIC, ROCHESTER and WINSTON, with seats and cards needed. */
+    @GET
+    @Path("/formats")
+    public List<DraftFormatView> formats() {
+        return draftApi.listFormats();
     }
 
     /** Cube collections a draft can be started from. */
@@ -61,6 +70,14 @@ public class DraftController {
     public DraftView pick(@PathParam("id") String id, PickRequest request) {
         if (request == null) throw new BadRequestException("cardName is required");
         return draftApi.pick(id, request.cardName()).orElseThrow(() -> notFound(id));
+    }
+
+    /** The generic way to play: picks for Classic and Rochester, taking or passing piles for Winston. */
+    @POST
+    @Path("/{id}/actions")
+    public DraftView act(@PathParam("id") String id, ActionRequest request) {
+        if (request == null) throw new BadRequestException("type is required: PICK, TAKE_PILE or PASS_PILE");
+        return draftApi.act(id, new DraftAction(request.type(), request.cardName())).orElseThrow(() -> notFound(id));
     }
 
     @POST

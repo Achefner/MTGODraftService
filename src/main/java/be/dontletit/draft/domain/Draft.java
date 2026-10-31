@@ -1,138 +1,115 @@
 package be.dontletit.draft.domain;
 
+import be.dontletit.draft.domain.command.DraftCommand;
+import be.dontletit.draft.domain.event.BoosterDraftStarted;
+import be.dontletit.draft.domain.event.DraftEvent;
+import be.dontletit.draft.domain.event.WinstonDraftStarted;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 /**
- * A booster draft: {@value #SEATS} seats, {@value #ROUNDS} rounds of {@value #PACK_SIZE}-card packs.
- * Seat {@value #HUMAN_SEAT} is the human player; the other seats pick at random.
- * Packs are passed to the left (seat + 1) in rounds 1 and 3 and to the right in round 2.
+ * A draft in progress, whatever its format. It is event sourced: {@link #handle} checks a command
+ * and records the events it causes; {@link #replay} rebuilds the same draft from those events.
+ * Seats are numbered from 0; the draft does not know which seats are people and which are bots.
  */
-public class Draft {
+public abstract sealed class Draft permits ClassicDraft, RochesterDraft, WinstonDraft {
 
-    public static final int SEATS = 8;
-    public static final int ROUNDS = 3;
-    public static final int PACK_SIZE = 15;
-    public static final int CARDS_NEEDED = SEATS * ROUNDS * PACK_SIZE;
-    public static final int HUMAN_SEAT = 0;
+    private final List<DraftEvent> history = new ArrayList<>();
+    private final List<DraftEvent> historyView = Collections.unmodifiableList(history);
 
-    private final String id;
-    private final Random random;
-    private final List<List<DraftCard>> packsToOpen;   // 24 sealed packs, dealt round by round
-    private final List<List<DraftCard>> packs;         // the pack currently in front of each seat
-    private final List<List<DraftCard>> picks;         // picks per seat
-    private int round;
-    private int pickNumber;
-    private boolean finished;
-
-    private Draft(String id, List<DraftCard> cards, Random random) {
-        this.id = id;
-        this.random = random;
+    /** Shuffles the pool and starts a draft of the given format. Extra cards are left out. */
+    public static Draft start(DraftFormat format, String id, List<DraftCard> cards, Random random) {
+        int size = cards == null ? 0 : cards.size();
+        if (size < format.cardsNeeded()) {
+            throw new IllegalArgumentException("A " + format.displayName() + " draft needs " + format.cardsNeeded() + " cards, got " + size);
+        }
         List<DraftCard> shuffled = new ArrayList<>(cards);
         Collections.shuffle(shuffled, random);
-        this.packsToOpen = new ArrayList<>();
-        for (int i = 0; i < SEATS * ROUNDS; i++) {
-            packsToOpen.add(new ArrayList<>(shuffled.subList(i * PACK_SIZE, (i + 1) * PACK_SIZE)));
-        }
-        this.packs = new ArrayList<>();
-        this.picks = new ArrayList<>();
-        for (int seat = 0; seat < SEATS; seat++) {
-            packs.add(new ArrayList<>());
-            picks.add(new ArrayList<>());
-        }
-        this.round = 0;
-        openNextRound();
+        List<DraftCard> used = shuffled.subList(0, format.cardsNeeded());
+        return switch (format) {
+            case CLASSIC -> ClassicDraft.start(id, used);
+            case ROCHESTER -> RochesterDraft.start(id, used);
+            case WINSTON -> WinstonDraft.start(id, used, random.nextInt(format.seats()));
+        };
     }
 
-    /** Starts a draft from a pool of at least {@value #CARDS_NEEDED} cards; extra cards are left out. */
-    public static Draft start(String id, List<DraftCard> cards, Random random) {
-        if (cards == null || cards.size() < CARDS_NEEDED) {
-            int size = cards == null ? 0 : cards.size();
-            throw new IllegalArgumentException("A draft needs " + CARDS_NEEDED + " cards, got " + size);
-        }
-        return new Draft(id, cards, random);
+    /** Rebuilds a draft from its history. */
+    public static Draft replay(List<DraftEvent> events) {
+        if (events == null || events.isEmpty()) throw new IllegalArgumentException("A draft history starts with a start event");
+        Draft draft = switch (events.get(0)) {
+            case BoosterDraftStarted started when started.format() == DraftFormat.CLASSIC -> new ClassicDraft();
+            case BoosterDraftStarted started when started.format() == DraftFormat.ROCHESTER -> new RochesterDraft();
+            case WinstonDraftStarted ignored -> new WinstonDraft();
+            default -> throw new IllegalArgumentException("A draft history starts with a start event, got " + events.get(0));
+        };
+        events.forEach(draft::record);
+        return draft;
     }
 
-    public String id() { return id; }
-    public int round() { return round; }
-    public int pickNumber() { return pickNumber; }
-    public boolean finished() { return finished; }
+    public abstract String id();
 
-    public PassDirection direction() {
-        return round % 2 == 1 ? PassDirection.LEFT : PassDirection.RIGHT;
-    }
+    public abstract DraftFormat format();
 
-    /** The pack in front of the human player. */
-    public List<DraftCard> currentPack() {
-        return packAt(HUMAN_SEAT);
-    }
+    public abstract boolean finished();
 
-    public List<DraftCard> packAt(int seat) {
-        return Collections.unmodifiableList(packs.get(seat));
-    }
+    /** Whether the seat has something to do right now. */
+    public abstract boolean canAct(int seat);
 
-    /** The human player's picks, in pick order. */
-    public List<DraftCard> picks() {
-        return picksOf(HUMAN_SEAT);
-    }
+    /** Every command the seat may send right now; empty when it cannot act. */
+    public abstract List<DraftCommand> legalCommands(int seat);
 
-    public List<DraftCard> picksOf(int seat) {
-        return Collections.unmodifiableList(picks.get(seat));
+    /** The cards a seat has drafted, in order. */
+    public abstract List<DraftCard> picksOf(int seat);
+
+    /** Everything that happened, oldest first. */
+    public final List<DraftEvent> history() {
+        return historyView;
     }
 
     /**
-     * The human picks the named card from their pack, every bot picks a random card from
-     * theirs, then packs are passed. When the packs are empty the next round opens.
+     * Executes a seat's command.
+     * @return the events it caused, in order
+     * @throws IllegalArgumentException when the seat does not exist or the command does not fit the format or the state
+     * @throws IllegalStateException when the draft is over or it is not the seat's turn
      */
-    public void pick(String cardName) {
-        if (finished) throw new IllegalStateException("The draft is over");
-        DraftCard choice = findInCurrentPack(cardName);
-
-        take(HUMAN_SEAT, choice);
-        for (int seat = 0; seat < SEATS; seat++) {
-            if (seat == HUMAN_SEAT) continue;
-            List<DraftCard> pack = packs.get(seat);
-            take(seat, pack.get(random.nextInt(pack.size())));
-        }
-
-        if (packs.get(HUMAN_SEAT).isEmpty()) {
-            if (round == ROUNDS) finished = true;
-            else openNextRound();
-        } else {
-            passPacks();
-            pickNumber++;
-        }
+    public final List<DraftEvent> handle(DraftCommand command) {
+        if (command == null) throw new IllegalArgumentException("A command is required");
+        int seat = command.seat();
+        if (seat < 0 || seat >= format().seats()) throw new IllegalArgumentException("No seat " + seat + " in a " + format().displayName() + " draft");
+        if (finished()) throw new IllegalStateException("The draft is over");
+        if (!canAct(seat)) throw new IllegalStateException("It is not seat " + seat + "'s turn");
+        int from = history.size();
+        execute(command);
+        return List.copyOf(history.subList(from, history.size()));
     }
 
-    private DraftCard findInCurrentPack(String cardName) {
+    /** Checks the command against the state and {@link #record}s its events. */
+    protected abstract void execute(DraftCommand command);
+
+    /** Changes the state for one event; must be deterministic so that replay works. */
+    protected abstract void apply(DraftEvent event);
+
+    protected final void record(DraftEvent event) {
+        apply(event);
+        history.add(event);
+    }
+
+    protected static DraftCard findCard(List<DraftCard> cards, String cardName, String where) {
         if (cardName != null) {
-            for (DraftCard card : packs.get(HUMAN_SEAT)) {
+            for (DraftCard card : cards) {
                 if (card.name().equalsIgnoreCase(cardName.trim())) return card;
             }
         }
-        throw new IllegalArgumentException("Card is not in your pack: " + cardName);
+        throw new IllegalArgumentException("Card is not " + where + ": " + cardName);
     }
 
-    private void take(int seat, DraftCard card) {
-        packs.get(seat).remove(card);
-        picks.get(seat).add(card);
+    protected static List<List<DraftCard>> boosters(List<DraftCard> cards, int count, int size) {
+        List<List<DraftCard>> boosters = new ArrayList<>();
+        for (int i = 0; i < count; i++) boosters.add(List.copyOf(cards.subList(i * size, (i + 1) * size)));
+        return boosters;
     }
 
-    private void passPacks() {
-        List<List<DraftCard>> passed = new ArrayList<>(packs);
-        int shift = direction() == PassDirection.LEFT ? 1 : SEATS - 1;
-        for (int seat = 0; seat < SEATS; seat++) {
-            packs.set((seat + shift) % SEATS, passed.get(seat));
-        }
-    }
-
-    private void openNextRound() {
-        round++;
-        pickNumber = 1;
-        for (int seat = 0; seat < SEATS; seat++) {
-            packs.set(seat, packsToOpen.get((round - 1) * SEATS + seat));
-        }
-    }
 }

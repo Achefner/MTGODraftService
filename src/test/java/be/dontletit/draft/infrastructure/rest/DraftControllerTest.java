@@ -43,6 +43,7 @@ class DraftControllerTest {
                 .then().statusCode(201)
                 .header("Location", containsString("/drafts/"))
                 .body("source", equalTo("random"))
+                .body("format", equalTo("CLASSIC"))
                 .body("round", equalTo(1))
                 .body("pickNumber", equalTo(1))
                 .body("direction", equalTo("LEFT"))
@@ -132,6 +133,80 @@ class DraftControllerTest {
         given().contentType("application/json").body("{\"name\": \" \"}")
                 .when().post("/drafts/" + id + "/deck")
                 .then().statusCode(400);
+    }
+
+    @Test
+    void formats_listClassicRochesterWinston() {
+        given().when().get("/drafts/formats")
+                .then().statusCode(200)
+                .body("name", contains("CLASSIC", "ROCHESTER", "WINSTON"))
+                .body("[2].displayName", equalTo("Winston"))
+                .body("[2].seats", equalTo(2))
+                .body("[2].cardsNeeded", equalTo(90))
+                .body("[1].description", not(emptyString()));
+    }
+
+    @Test
+    void startWithAFormat_rochesterShowsTheTable_unknownFormatIs400() {
+        given().contentType("application/json").body("{\"source\": \"random\", \"format\": \"ROCHESTER\"}")
+                .when().post("/drafts")
+                .then().statusCode(201)
+                .body("format", equalTo("ROCHESTER"))
+                .body("activeSeat", equalTo(0))
+                .body("packNumber", equalTo(1))
+                .body("pack.size()", equalTo(15))
+                .body("seats.size()", equalTo(8))
+                .body("log.type", hasItem("PACK_OPENED"));
+
+        given().contentType("application/json").body("{\"source\": \"random\", \"format\": \"sealed\"}")
+                .when().post("/drafts")
+                .then().statusCode(400).body("error", containsString("WINSTON"));
+    }
+
+    @Test
+    void winstonActions_takeAndPassPiles_wrongActionsAre400() {
+        String id = given().contentType("application/json").body("{\"source\": \"random\", \"format\": \"winston\"}")
+                .when().post("/drafts")
+                .then().statusCode(201)
+                .body("format", equalTo("WINSTON"))
+                .body("yourTurn", equalTo(true))
+                .body("winston.pileSizes.size()", equalTo(3))
+                .body("seats.size()", equalTo(2))
+                .extract().path("id");
+
+        given().contentType("application/json").body("{\"type\": \"PASS_PILE\"}")
+                .when().post("/drafts/" + id + "/actions")
+                .then().statusCode(200)
+                .body("winston.currentPile", equalTo(1));
+        given().contentType("application/json").body("{\"type\": \"TAKE_PILE\"}")
+                .when().post("/drafts/" + id + "/actions")
+                .then().statusCode(200)
+                .body("picks.size()", greaterThan(0));
+
+        given().contentType("application/json").body("{\"type\": \"PICK\", \"cardName\": \"Random 1\"}")
+                .when().post("/drafts/" + id + "/actions")
+                .then().statusCode(400);
+        given().contentType("application/json").body("{\"type\": \"SHUFFLE\"}")
+                .when().post("/drafts/" + id + "/actions")
+                .then().statusCode(400).body("error", containsString("SHUFFLE"));
+        given().contentType("application/json").body("{\"type\": \"TAKE_PILE\"}")
+                .when().post("/drafts/nope/actions")
+                .then().statusCode(404);
+    }
+
+    @Test
+    void actingOnAFinishedDraft_is409() {
+        String id = given().contentType("application/json").body("{\"source\": \"random\", \"format\": \"WINSTON\"}")
+                .when().post("/drafts").then().statusCode(201).extract().path("id");
+        boolean finished = false;
+        while (!finished) {
+            finished = given().contentType("application/json").body("{\"type\": \"TAKE_PILE\"}")
+                    .when().post("/drafts/" + id + "/actions")
+                    .then().statusCode(200).extract().path("finished");
+        }
+        given().contentType("application/json").body("{\"type\": \"TAKE_PILE\"}")
+                .when().post("/drafts/" + id + "/actions")
+                .then().statusCode(409);
     }
 
     @Test
