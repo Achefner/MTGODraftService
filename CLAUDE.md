@@ -29,6 +29,10 @@ mvn test               # domain + application are plain JUnit on stubs (InMemory
                        # @QuarkusTest on H2 for the repository, controller and SSE stream
 ```
 
+- Dependency rule, enforced by `HexagonalArchitectureTest` (reads every main file's imports):
+  domain and api depend on nothing else; spi only on the domain; application on the ports, the
+  domain and CDI annotations, never on infrastructure; rest reaches the core only through the API
+  port; data and timer adapters never touch api, application or rest; config never uses application.
 - Every rule lives in the domain. `Draft.handle(command)` validates, then the format's `execute`
   calls `record(event)`, which runs `apply(event)` and appends to the history. `apply` must stay
   deterministic: `Draft.replay(history)` rebuilds a draft with `apply` alone. Randomness (shuffle,
