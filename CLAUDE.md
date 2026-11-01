@@ -6,7 +6,7 @@ random bots, in front of `../MTGODatabase`. Persists to its own postgres (`docke
 ```
 be.dontletit.draft/
 ├── domain/          # Draft (sealed base: handle/replay/history/moveCount) + ClassicDraft, RochesterDraft, WinstonDraft,
-│   │                # DraftFormat, PickTimer (time per decision), RandomBot, DraftCard(name, imageUrl), PassDirection
+│   │                # DraftFormat, PickTimer (time per decision), RandomBot, DraftCard(name, imageUrl, manaValue), ManaValue, PassDirection
 │   ├── command/     # DraftCommand: PickCard, TakePile, PassPile (each carries its seat)
 │   └── event/       # DraftEvent: *DraftStarted, RoundStarted, PackOpened, CardPicked, PackPassed,
 │                    #   PileTaken, PilePassed, StackCardTaken, DraftFinished
@@ -48,5 +48,7 @@ mvn test               # domain + application are plain JUnit on stubs (InMemory
 - Anything sent to a seat goes through `DraftViews` / `EventProjection.forSeat`: no hidden cards.
 - New event kinds need a case in `EventCodecTest` (it checks every permitted subclass round-trips).
 - Schema changes go in a new `db/migration/V<n>__*.sql`; it must run on postgres and H2 (tests).
+- `DraftCard.manaValue` is an Integer: null for cards in events stored before it existed (old JSON
+  has no such field). `MtgoDatabaseCardPool` computes it with `ManaValue.of(manaCost)`.
 - Random drafts use MTGODatabase's `/cards/random/{count}`, which samples with replacement, so a
   random pool may contain the same card twice; that is accepted.

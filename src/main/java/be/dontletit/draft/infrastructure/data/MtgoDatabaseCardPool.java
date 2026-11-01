@@ -1,6 +1,7 @@
 package be.dontletit.draft.infrastructure.data;
 
 import be.dontletit.draft.domain.DraftCard;
+import be.dontletit.draft.domain.ManaValue;
 import be.dontletit.draft.spi.CardPoolSpiPort;
 import be.dontletit.draft.spi.CubeInfo;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,6 +50,6 @@ public class MtgoDatabaseCardPool implements CardPoolSpiPort {
     }
 
     private static DraftCard toCard(CardDto dto) {
-        return new DraftCard(dto.name(), dto.imgUrl());
+        return new DraftCard(dto.name(), dto.imgUrl(), ManaValue.of(dto.manaCost()));
     }
 }

@@ -87,6 +87,8 @@ Draft view:
   log: [{type, seat, round, direction, packNumber, pile, cardCount, cards}] }  // last 30 events you may see
 ```
 
+Every card is `{name, imageUrl, manaValue}`; the mana value is computed from the card's mana
+cost in MTGODatabase (X counts 0, {2/W} counts 2) and is null for cards stored before it existed.
 Fields that do not apply are null. Neither the log nor the stream shows hidden information:
 other seats' Classic picks or the cards of a Winston pile someone else took.
 

@@ -28,11 +28,11 @@ class MtgoDatabaseCardPoolTest {
 
     @Test
     void randomCards_mapsNameAndImage() {
-        when(database.randomCards(2)).thenReturn(List.of(new CardDto("Black Lotus", "https://img/lotus.jpg"), new CardDto("Sol Ring", null)));
+        when(database.randomCards(2)).thenReturn(List.of(new CardDto("Black Lotus", "https://img/lotus.jpg", "{0}"), new CardDto("Sol Ring", null, "{1}")));
 
         List<DraftCard> cards = pool.randomCards(2);
 
-        assertEquals(List.of(new DraftCard("Black Lotus", "https://img/lotus.jpg"), new DraftCard("Sol Ring", null)), cards);
+        assertEquals(List.of(new DraftCard("Black Lotus", "https://img/lotus.jpg", 0), new DraftCard("Sol Ring", null, 1)), cards, "the mana value comes from the mana cost");
     }
 
     @Test

@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class EventCodecTest {
 
-    static final DraftCard BOLT = new DraftCard("Lightning Bolt", "https://img/bolt.jpg");
+    static final DraftCard BOLT = new DraftCard("Lightning Bolt", "https://img/bolt.jpg", 1);
     static final DraftCard OKO = new DraftCard("Oko, Thief of Crowns", null);
 
     final EventCodec codec = new EventCodec(new ObjectMapper());
@@ -55,6 +55,12 @@ class EventCodecTest {
     void theTypeNamesEveryPermittedEvent() {
         Arrays.stream(DraftEvent.class.getPermittedSubclasses())
                 .forEach(type -> assertTrue(EVERY_KIND.stream().anyMatch(e -> e.getClass() == type), type.getSimpleName()));
+    }
+
+    @Test
+    void eventsStoredBeforeManaValues_stillLoad_withAnUnknownManaValue() {
+        DraftEvent old = codec.decode("CardPicked", "{\"seat\":2,\"card\":{\"name\":\"Sol Ring\",\"imageUrl\":\"https://img/sol.jpg\"},\"seenByAll\":false}");
+        assertEquals(new CardPicked(2, new DraftCard("Sol Ring", "https://img/sol.jpg", null), false), old);
     }
 
     @Test

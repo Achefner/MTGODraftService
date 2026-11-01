@@ -24,10 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class EventProjectionTest {
 
-    static final DraftCard BOLT = new DraftCard("Lightning Bolt", "https://img/bolt.jpg");
-    static final DraftCard OKO = new DraftCard("Oko, Thief of Crowns", "https://img/oko.jpg");
-    static final DraftCardView BOLT_VIEW = new DraftCardView("Lightning Bolt", "https://img/bolt.jpg");
-    static final DraftCardView OKO_VIEW = new DraftCardView("Oko, Thief of Crowns", "https://img/oko.jpg");
+    static final DraftCard BOLT = new DraftCard("Lightning Bolt", "https://img/bolt.jpg", 1);
+    static final DraftCard OKO = new DraftCard("Oko, Thief of Crowns", "https://img/oko.jpg", 3);
+    static final DraftCardView BOLT_VIEW = new DraftCardView("Lightning Bolt", "https://img/bolt.jpg", 1);
+    static final DraftCardView OKO_VIEW = new DraftCardView("Oko, Thief of Crowns", "https://img/oko.jpg", 3);
 
     static DraftEventView seen(Object event, int viewer) {
         return EventProjection.forSeat((be.dontletit.draft.domain.event.DraftEvent) event, viewer).orElseThrow();

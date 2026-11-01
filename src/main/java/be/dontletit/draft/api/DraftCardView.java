@@ -1,3 +1,4 @@
 package be.dontletit.draft.api;
 
-public record DraftCardView(String name, String imageUrl) {}
+/** A card: its name, its picture and its mana value (null when unknown). */
+public record DraftCardView(String name, String imageUrl, Integer manaValue) {}

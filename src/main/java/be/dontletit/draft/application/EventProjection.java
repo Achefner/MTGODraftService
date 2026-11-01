@@ -51,6 +51,6 @@ public final class EventProjection {
     }
 
     static List<DraftCardView> cards(List<DraftCard> cards) {
-        return cards.stream().map(card -> new DraftCardView(card.name(), card.imageUrl())).toList();
+        return cards.stream().map(card -> new DraftCardView(card.name(), card.imageUrl(), card.manaValue())).toList();
     }
 }
